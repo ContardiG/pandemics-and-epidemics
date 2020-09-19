@@ -1,0 +1,206 @@
+# -*- coding: utf-8 -*-
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+class epid:
+  def __init__(self, smodel, smethod, population=1, k=0,beta = 0.2, gamma=1/14, alpha=1/5, lamb=0., mu=0.):
+    '''
+    #Creation of a model.
+    #PARAMETERS >>         population : redundant.
+    #                      k          : (in SEIRs models) relation between infected and susceptible people.
+    #                      beta       : 
+    #                      gamma      : inverse of 2 weeks in days
+    #                      alpha      : 
+    #                      lamb       : birth rate.
+    #                      mu         : death rate
+    #                      days       : number of days to analyze.
+    #
+    #INTERNAL VARIABLES >> dt  : a day divided in hours.
+    #                      kdt : number of hours in a day.
+    #                      N   : total population.
+    #                      S   : susceptible people (in SIR models can be infected. In SEIR models they can't, they are going to expose itself to the disease).
+    #                      E   : exposed people (only valid in SEIR models. Represent infectable people).
+    #                      I   : infected people (they can infect other people).
+    #                      R   : recovered people.
+    #
+    #CALL EXAMPLE >>       mdl : epid(300000, 4, .2, .07, .2, .005, .001)
+    '''
+
+    self.days       = 365
+    self.dt         = 1/24
+    self.kdt        = 24
+    self.beta       = beta
+    self.gamma      = gamma
+    self.alpha      = alpha
+    self.lamb       = lamb
+    self.mu         = mu
+    self.population = population
+    self.k          = k
+
+    self.S = np.zeros(self.days)
+    self.I = np.zeros(self.days)
+    self.R = np.zeros(self.days)
+    self.N = np.zeros(self.days)
+    self.E = np.zeros(self.days)
+
+    self.smethod = smethod
+    if smethod == 'euler':
+        self.method= self.euler
+    elif smethod == 'rk4':
+        self.method = self.rk4
+    
+    self.smodel = smodel
+    if smodel == 'seir':
+      self.model= self.seir_mod
+    elif smodel == 'sir':
+        self.model = self.sir_mod
+
+
+  def initialization(self,inf0):
+    I = inf0
+    R = 0.
+    E = 0
+    if self.smodel == 'seir':
+      E = self.k*I
+    S = self.population - E - I
+    print(self.smodel)
+    if self.smodel == 'sir':
+      v = np.array([S,I,R])
+    elif self.smodel == 'seir':
+      v = np.array([S,E,I,R])
+   
+    return v
+
+
+  def exec(self,method,model,*args):
+    '''
+    #CALL EXAMPLE >> mdl1.exec(mdl1.rk4,mdl1.sir_mod, mdl1.S, mdl1.I, mdl1.R)
+    '''
+
+    self.integration(method,model,*args)
+    self.graph(model,method)
+    strings=['susceptible','infected','recovered','exposed']
+    arrays=[self.S,self.E,self.I,self.R]
+    for i in range(4):
+      if i!=3:
+        self.max(arrays[i],strings[i])
+      if i == 3:
+        self.max(arrays[i],strings[i])
+    return
+
+  
+
+
+  def oneday_int(self,x0):
+    '''
+    #PARAMETERS >> method : integration method euler or rk4;
+    #              model  : epidemiological desease model sir_mod or seir_mod; 
+    #              *args  : receive multiple list as posicional parameters S,I,R or S,E,I,R;
+    #
+    #CALL EXAMPLE >> integration(euler, sir_mod, S, I, R)
+    '''
+    
+    for it in range(self.kdt): 
+      x = self.method(x0) 
+
+    return x
+
+
+  def gen_int(self,x0):
+    '''
+    #PARAMETERS >> method : integration method euler or rk4;
+    #              model  : epidemiological desease model sir_mod or seir_mod; 
+    #              days   : receives an integer wich indicates the amount of days to evaluate
+    #              *args  : receive multiple list as posicional parameters S,I,R or S,E,I,R;
+    #
+    #CALL EXAMPLE >> integration(euler, sir_mod, S, I, R)
+    '''
+    
+    x_t=[]
+    x_t.append(x0)
+    for it in range(self.days): ##-- corregido, no pide argumento. Toma el valor de self.days.
+      print(self.model,x0) 
+      x = self.oneday_int(x0) 
+      x_t.append(x)
+
+    return x_t  
+
+
+
+  
+   
+  def euler(self, array): 
+    '''
+    #integration by eulers method
+    #PARAMETERS >>      model : epidemiological desease model sir_mod or seir_mod 
+    #                   array : receives the current elements of a list
+    #                   kdt   : number of integrations in one day
+    '''
+    dx=np.array(len(xold))
+    for i in range(len(xold)):
+      dx = model(xold)
+  
+    return xold + dx
+
+  def rk4(self,model,xold): 
+    '''
+    #Runge-Kutta's 4th orden integration method** revision pendiente
+    # PARAMETERS >> model : epidemiological desease model sir_mod or seir_mod;
+    #               xold  : receives the last element in a list
+    '''
+
+    flag = 1
+    dx1 = model( xold, flag )
+    dx2 = model( xold + 0.5 * dx1, flag )
+    dx3 = model( xold + 0.5 * dx2, flag )
+    dx4 = model( xold + dx3, flag )
+    xnew= xold +  ( dx1 + 2.0 * (dx2 + dx3) + dx4 ) / 6.0    
+    return xnew
+
+
+  def sir_mod(self,array):
+    '''
+    #The SIR model for epidemic diseases-
+    # PARAMETERS >> array
+    #               flag = 
+    '''
+
+    global N0
+    S0, I0, R0 = array[0], array[1], array[2]
+    N0 = self.population   
+    dS1 = - self.beta*(S0*I0/N0)*self.dt
+    dI1 = (self.beta*(S0*I0/N0) - self.gamma*I0)*self.dt
+    dR1 =  self.gamma*I0*self.dt
+
+    return np.array([dS1, dI1, dR1])
+
+
+  def seir_mod(self,array, flag = 0):
+    '''
+    #PARAMETERS >>   array = 
+    #CALL EXAMPLE >> seir_mod(data, 1)
+    '''
+
+    global N0
+    S0, E0, I0, R0 = array[0], array[1], array[2], array[3]
+    N0 = self.population
+    S1 = (self.lamb*N0 - self.mu*S0 - self.beta*(S0*I0/N0)) * self.dt
+    E1 = (self.beta*(S0*I0/N0) - (self.mu + self.alpha)*E0) * self.dt
+    I1 = (self.alpha*E0 - (self.gamma + self.mu)*I0) * self.dt
+    R1 = (self.gamma*I0 - self.mu*R0)*self.dt
+    
+    return np.array([S1, E1, I1, R1])
+
+mdl1 = epid('sir','euler',300000)
+x0 = mdl1.initialization(10)
+print(x0)
+x_t = mdl1.gen_int(x0)
+# x_t es la salida cada 24 horas con los datos cada dia.
+mdl1.exec(mdl1.euler,mdl1.seir_mod, mdl1.S, mdl1.E, mdl1.I, mdl1.R)
+
+help(mdl1)
+
+def maximo (array, string):
+    print ("El pico de", string, "se da el dia: ", int(np.argmax(array)))
+    return
